@@ -99,9 +99,10 @@ export class HUD {
     this.$prompt.classList.add('hidden');
   }
 
-  runQTE(label, windowSec) {
+  runQTE(label, windowSec, key = 'KeyE', keyLabel = 'E') {
     return new Promise((resolve) => {
       this.$qteLabel.textContent = label;
+      document.getElementById('qte-key').textContent = keyLabel;
       this.$qte.classList.remove('hidden');
       this.$qteFill.style.transition = 'none';
       this.$qteFill.style.transform = 'scaleX(1)';
@@ -121,7 +122,7 @@ export class HUD {
         resolve(ok);
       };
       const onKey = (e) => {
-        if (e.code === 'KeyE') finish(true);
+        if (e.code === key) finish(true);
       };
       window.addEventListener('keydown', onKey);
       const timer = setTimeout(() => finish(false), windowSec * 1000);

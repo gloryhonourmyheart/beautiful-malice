@@ -188,20 +188,7 @@ export function buildClassroom(scene) {
   addCollider(SEATS.emptyLeather.x - 0.35, SEATS.emptyLeather.x + 0.35,
     SEATS.emptyLeather.z - 0.35, SEATS.emptyLeather.z + 0.95, 'leather');
 
-  // 障碍 1：横在过道上的腿
-  const legBlock = new THREE.Group();
-  const legMat = flat('#2f3340');
-  const thigh = boxMesh(0.9, 0.13, 0.14, legMat);
-  thigh.position.set(-0.6, 0.78, 0);
-  legBlock.add(thigh);
-  const shin = boxMesh(0.14, 0.13, 0.34, legMat);
-  shin.position.set(-1.0, 0.78, 0.16);
-  legBlock.add(shin);
-  const shoe = boxMesh(0.16, 0.09, 0.24, flat('#15130f'));
-  shoe.position.set(-1.0, 0.76, 0.30);
-  legBlock.add(shoe);
-  legBlock.position.set(0.35, 0, 3.82);
-  group.add(legBlock);
+  // 障碍 1 的挑事男生坐在 (-1.2, 3.8)，黑板擦从讲台侧方的盲区扔出
 
   // 障碍 2：纸团 + 倒扣的练习册
   const paperPile = new THREE.Group();
@@ -232,6 +219,6 @@ export function buildClassroom(scene) {
     colliders,
     addCollider,
     npcs,
-    props: { legBlock, paperPile, bin, leather, cup }
+    props: { paperPile, bin, leather, cup }
   };
 }

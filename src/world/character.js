@@ -19,7 +19,9 @@ export function makePerson({
   skin = '#f0d3bd',
   accent = null,
   pose = 'stand',
-  longHair = false
+  longHair = false,
+  headphones = false,
+  backpack = false
 } = {}) {
   const g = new THREE.Group();
   const mShirt = mat(shirt);
@@ -63,6 +65,27 @@ export function makePerson({
     const pin = box(0.05, 0.02, 0.02, mat(accent, false));
     pin.position.set(0.09, 0.04, 0.12);
     head.add(pin);
+  }
+
+  // 蓝牙耳机（双耳）
+  if (headphones) {
+    const hpMat = mat('#232830', false);
+    const hpL = box(0.035, 0.075, 0.055, hpMat);
+    hpL.position.set(-0.125, -0.02, 0);
+    head.add(hpL);
+    const hpR = box(0.035, 0.075, 0.055, hpMat);
+    hpR.position.set(0.125, -0.02, 0);
+    head.add(hpR);
+  }
+
+  // 书包（背在身后 -Z）
+  if (backpack) {
+    const bp = box(0.32, 0.40, 0.15, mat('#39404d'));
+    bp.position.set(0, hipY + 0.24, -0.20);
+    g.add(bp);
+    const strap = box(0.30, 0.04, 0.16, mat('#2b303a'));
+    strap.position.set(0, hipY + 0.46, -0.14);
+    g.add(strap);
   }
 
   // 手臂

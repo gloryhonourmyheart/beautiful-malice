@@ -43,16 +43,20 @@ scene.add(roomLight);
 const classroom = buildClassroom(scene);
 const colliders = [...classroom.colliders];
 
-/* ---------------- 玩家 ---------------- */
+/* ---------------- 玩家（张知安） ---------------- */
 
-let player = makePerson({
+const PLAYER_LOOK = {
   shirt: '#efece4',
   lower: '#252d3d',
   hair: '#15120e',
   skin: '#f2d6bf',
   accent: '#cfd6de',
-  longHair: true
-});
+  longHair: true,
+  headphones: true,
+  backpack: true
+};
+
+let player = makePerson(PLAYER_LOOK);
 player.position.set(-4.4, 0, 1.15);
 scene.add(player);
 
@@ -67,12 +71,7 @@ const state = {
 
 const hud = new HUD();
 const audio = new GameAudio();
-const controls = new ThirdPersonControls({
-  camera,
-  player,
-  colliders,
-  dom: canvas
-});
+const controls = new ThirdPersonControls({ camera, player, colliders, dom: canvas });
 
 const INTRO_KEYS = [
   { t: 0.0, pos: [-4.3, 1.82, 4.35], look: [-5.25, 1.15, 3.35] },
@@ -84,7 +83,7 @@ const INTRO_KEYS = [
 
 let introT = 0;
 const narrationFired = new Set();
-let clock = new THREE.Clock();
+const clock = new THREE.Clock();
 let elapsed = 0;
 
 /* ---------------- 小工具 ---------------- */
@@ -107,6 +106,19 @@ function removeBlocker(c) {
 
 function near(x, z, dist) {
   return Math.hypot(player.position.x - x, player.position.z - z) < dist;
+}
+
+async function shakeCamera(times = 5, amp = 0.05) {
+  const base = camera.position.clone();
+  for (let i = 0; i < times; i++) {
+    camera.position.set(
+      base.x + (Math.random() - 0.5) * amp * 2,
+      base.y + (Math.random() - 0.5) * amp,
+      base.z
+    );
+    await sleep(55);
+  }
+  camera.position.copy(base);
 }
 
 /* ---------------- 开场 ---------------- */
@@ -157,7 +169,7 @@ function updateIntro(dt) {
   LINES.intro.narration.forEach((n, i) => {
     if (introT >= n.at && !narrationFired.has(i)) {
       narrationFired.add(i);
-      hud.sayAndWait(n.text, '', 1500, 26);
+      hud.sayAndWait(n.text, '', 1400, 26);
     }
   });
 
@@ -181,39 +193,68 @@ document.getElementById('skip').addEventListener('click', () => {
   if (state.phase === 'intro') endIntro();
 });
 
-/* ---------------- 障碍 1 ---------------- */
+/* ---------------- 障碍 1 · 黑板擦闪避 ---------------- */
 
-let block1 = null;
+let block2 = null;
+let eraserMesh = null;
+
+function spawnEraser() {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(0.16, 0.06, 0.11),
+    new THREE.MeshStandardMaterial({ color: '#e8e4da', roughness: 0.8, flatShading: true })
+  );
+  m.position.set(
+    player.position.x - 1.15,
+    player.position.y + 0.12,
+    player.position.z - 1.75
+  );
+  scene.add(m);
+  eraserMesh = m;
+  return m;
+}
 
 async function obstacle1() {
-  state.phase = 'dialogue';
+  state.phase = 'qte';
   state.flags.b1 = true;
   hud.hidePrompt();
 
-  await hud.sayAndWait(LINES.obstacle1.line, LINES.obstacle1.speaker, 350, 30);
-  const choice = await hud.choose(LINES.obstacle1.choices);
-  audio.blip();
-  await applyAura(choice.aura);
+  const ok = await hud.runQTE(LINES.obstacle1.prompt, LINES.obstacle1.window, 'KeyA', 'A');
+  const res = ok ? LINES.obstacle1.success : LINES.obstacle1.fail;
 
-  if (choice.effect === 'b1_good') {
-    // 腿收回去
-    audio.thud();
-    classroom.props.legBlock.visible = false;
-    if (block1) removeBlocker(block1);
-    block1 = null;
-    await hud.say(choice.reply, '');
-    await sleep(280);
-    await kaiseonGlance();
-  } else {
-    audio.paper();
-    dropBook();
-    await hud.say(choice.reply, '');
-    audio.laugh();
-    await sleep(400);
-    if (block1) removeBlocker(block1);
-    block1 = null;
+  // 黑板擦飞行：前 0.6 秒逼近，之后命中或擦过
+  const e = spawnEraser();
+  const start = e.position.clone();
+  const target = player.position.clone().add(new THREE.Vector3(0, 1.35, 0));
+
+  for (let i = 1; i <= 6; i++) {
+    e.position.lerpVectors(start, target, (i / 6) * 0.62);
+    await sleep(95);
   }
 
+  if (ok) {
+    // 擦着发丝飞过，砸向身后
+    const past = target.clone().add(new THREE.Vector3(0.5, 0.02, 3.1));
+    for (let i = 1; i <= 5; i++) {
+      e.position.lerpVectors(target, past, i / 5);
+      await sleep(65);
+    }
+    audio.thud();
+    await applyAura(res.aura);
+    await hud.say(res.reply, '', 30);
+    await sleep(250);
+    await kaiseonGlance();
+  } else {
+    audio.thud();
+    e.visible = false;
+    await applyAura(res.aura);
+    await shakeCamera(5, 0.06);
+    dropBook();
+    audio.laugh();
+    await hud.say(res.reply, '', 30);
+    await sleep(400);
+  }
+
+  e.visible = false;
   hud.hideSubtitle();
   state.phase = 'play';
 }
@@ -243,16 +284,14 @@ function dropBook() {
   scene.add(bookMesh);
 }
 
-/* ---------------- 障碍 2 ---------------- */
-
-let block2 = null;
+/* ---------------- 障碍 2 · 纸团清理 ---------------- */
 
 async function obstacle2() {
   state.phase = 'qte';
   state.flags.b2 = true;
   hud.hidePrompt();
 
-  const ok = await hud.runQTE(LINES.obstacle2.prompt, LINES.obstacle2.window);
+  const ok = await hud.runQTE(LINES.obstacle2.prompt, LINES.obstacle2.window, 'KeyE', 'E');
   const res = ok ? LINES.obstacle2.success : LINES.obstacle2.fail;
 
   await applyAura(res.aura);
@@ -263,7 +302,7 @@ async function obstacle2() {
     audio.laugh();
   }
 
-  await hud.say(res.reply, '', 32);
+  await hud.say(res.reply, '', 30);
   await sleep(300);
   hud.hideSubtitle();
 
@@ -272,30 +311,28 @@ async function obstacle2() {
   state.phase = 'play';
 }
 
-/* ---------------- 障碍 3 ---------------- */
+/* ---------------- 障碍 3 · 搭讪邀坐 ---------------- */
 
 async function obstacle3() {
   state.phase = 'dialogue';
   state.flags.b3 = true;
   hud.hidePrompt();
 
-  await hud.sayAndWait(LINES.obstacle3.line, LINES.obstacle3.speaker, 350, 30);
+  await hud.sayAndWait(LINES.obstacle3.line, LINES.obstacle3.speaker, 350, 28);
   const choice = await hud.choose(LINES.obstacle3.choices);
   audio.blip();
   await applyAura(choice.aura);
 
   if (choice.effect === 'b3_good') {
-    // 打斗：镜头切 + 音效，不做完整动作
-    audio.scrape();
-    await sleep(120);
-    audio.thud();
+    audio.tsk();
     const head = classroom.npcs.obstacle3?.userData?.head;
     if (head) head.rotation.y = -0.4;
   } else {
     audio.laugh();
+    await shakeCamera(4, 0.04);
   }
 
-  await hud.say(choice.reply, '', 30);
+  await hud.say(choice.reply, '', 28);
   await sleep(320);
   hud.hideSubtitle();
   state.phase = 'play';
@@ -303,74 +340,63 @@ async function obstacle3() {
 
 /* ---------------- 结局 ---------------- */
 
-async function sitDown() {
+async function successEnding() {
   state.phase = 'ending';
   state.flags.sat = true;
   hud.hidePrompt();
   hud.hideSubtitle();
 
-  const success = state.aura >= LINES.meta.threshold;
+  hud.fade(true);
+  await sleep(520);
 
-  if (success) {
-    hud.fade(true);
-    await sleep(520);
+  scene.remove(player);
+  player = makePerson({ ...PLAYER_LOOK, pose: 'sit' });
+  player.position.set(SEATS.target.x, 0, SEATS.target.z + 0.46);
+  player.rotation.y = Math.PI;
+  scene.add(player);
 
-    scene.remove(player);
-    player = makePerson({
-      shirt: '#efece4',
-      lower: '#252d3d',
-      hair: '#15120e',
-      skin: '#f2d6bf',
-      accent: '#cfd6de',
-      longHair: true,
-      pose: 'sit'
-    });
-    player.position.set(SEATS.target.x, 0, SEATS.target.z + 0.46);
-    player.rotation.y = Math.PI;
-    scene.add(player);
+  camera.position.set(3.05, 1.72, 7.35);
+  camera.lookAt(SEATS.target.x, 1.05, SEATS.target.z);
+  hud.fade(false);
+  await sleep(420);
 
-    camera.position.set(3.05, 1.72, 7.35);
-    camera.lookAt(SEATS.target.x, 1.05, SEATS.target.z);
-    hud.fade(false);
-    await sleep(420);
+  await hud.say(LINES.ending.success.os, '内心', 22);
+  await sleep(900);
 
-    await hud.say(LINES.ending.success.os, '内心', 22);
-    await sleep(900);
+  // 切到窗边：权时宪第一次回头
+  camera.position.set(-2.95, 1.66, 4.62);
+  camera.lookAt(SEATS.kaiseon.x, 1.45, SEATS.kaiseon.z + 0.5);
+  const head = classroom.npcs.kaiseon?.userData?.head;
+  if (head) head.rotation.y = 0.45;
+  audio.sting();
+  await sleep(1600);
 
-    // 切到窗边
-    camera.position.set(-2.95, 1.66, 4.62);
-    camera.lookAt(SEATS.kaiseon.x, 1.45, SEATS.kaiseon.z + 0.5);
-    const head = classroom.npcs.kaiseon?.userData?.head;
-    if (head) head.rotation.y = 0.45;
-    audio.sting();
-    await sleep(1600);
+  hud.hideSubtitle();
+  hud.showCard({
+    kicker: LINES.ending.success.kicker,
+    title: LINES.ending.success.title,
+    sub: LINES.ending.success.sub
+  });
+  state.phase = 'done';
+}
 
-    hud.hideSubtitle();
-    hud.showCard({
-      kicker: LINES.ending.success.kicker,
-      title: LINES.ending.success.title,
-      sub: LINES.ending.success.sub
-    });
-  } else {
-    audio.bell();
-    // 轻微镜头晃动
-    const base = camera.position.clone();
-    for (let i = 0; i < 6; i++) {
-      camera.position.set(base.x + (Math.random() - 0.5) * 0.06, base.y + (Math.random() - 0.5) * 0.04, base.z);
-      await sleep(60);
-    }
-    camera.position.copy(base);
+async function failEnding() {
+  state.phase = 'ending';
+  hud.hidePrompt();
+  hud.hideSubtitle();
 
-    await hud.say(LINES.ending.fail.os, '内心', 20);
-    await sleep(900);
-    hud.hideSubtitle();
-    hud.showCard({
-      kicker: LINES.ending.fail.kicker,
-      title: LINES.ending.fail.title,
-      sub: LINES.ending.fail.sub
-    });
-  }
+  audio.bell();
+  await shakeCamera(4, 0.035);
+  await sleep(500);
 
+  await hud.say(LINES.ending.fail.os, '内心', 20);
+  await sleep(900);
+  hud.hideSubtitle();
+  hud.showCard({
+    kicker: LINES.ending.fail.kicker,
+    title: LINES.ending.fail.title,
+    sub: LINES.ending.fail.sub
+  });
   state.phase = 'done';
 }
 
@@ -389,7 +415,7 @@ window.addEventListener('keydown', (e) => {
       audio.paper();
       hud.setTask(LINES.task.find);
     } else if (state.promptAction === 'sit' && near(SEATS.target.x, SEATS.target.z + 0.46, 1.5)) {
-      sitDown();
+      successEnding();
     }
   }
 });
@@ -404,43 +430,54 @@ document.getElementById('btn-restart').addEventListener('click', () => location.
 
 /* ---------------- 主循环 ---------------- */
 
-// 障碍 1 的腿先拦住过道
-block1 = addBlocker(-0.90, 0.90, 3.58, 3.98, 'block1');
+// 纸团暂时堵住后排通路（障碍 2 解决后移除）
+block2 = addBlocker(-1.05, 1.05, 7.56, 8.30, 'block2');
 
 function updatePlay() {
   const p = player.position;
 
-  // 障碍 1
-  if (!state.flags.b1 && p.z > 2.70 && p.z < 3.58 && Math.abs(p.x) < 1.15) {
+  // 障碍 1：第三排中段，黑板擦从盲区袭来
+  if (!state.flags.b1 && p.z > 4.70 && p.z < 5.32 && Math.abs(p.x) < 1.15) {
     obstacle1();
     return;
   }
 
-  // 障碍 2
+  // 障碍 2：后排过道，纸团堵路
   if (state.flags.b1 && !state.flags.b2 && p.z > 6.85 && p.z < 7.52 && Math.abs(p.x) < 1.05) {
-    block2 = addBlocker(-1.05, 1.05, 7.56, 8.30, 'block2');
     obstacle2();
     return;
   }
 
-  // 障碍 3
+  // 障碍 3：抵达目标座位旁
   if (state.flags.b2 && !state.flags.b3 && p.x > 2.05 && p.z > 7.30) {
     obstacle3();
     return;
   }
 
-  // 捡书 / 坐下
   if (state.phase !== 'play') return;
 
+  // 捡书
   if (bookMesh && near(bookMesh.position.x, bookMesh.position.z, 1.3)) {
     state.promptAction = 'pickup';
     hud.showPrompt(LINES.task.pickup);
     return;
   }
 
-  if (state.flags.b3 && !state.flags.sat && near(SEATS.target.x, SEATS.target.z + 0.46, 1.45)) {
+  // 坐下（只在气场值达标时开放）
+  if (
+    state.flags.b3 &&
+    !state.flags.sat &&
+    state.aura >= LINES.meta.threshold &&
+    near(SEATS.target.x, SEATS.target.z + 0.46, 1.45)
+  ) {
     state.promptAction = 'sit';
     hud.showPrompt(LINES.task.sit);
+    return;
+  }
+
+  // 气场值不足且走完三关 → 失败结局
+  if (state.flags.b3 && !state.flags.sat && state.aura < LINES.meta.threshold && p.x > 3.4 && p.z > 7.30) {
+    failEnding();
     return;
   }
 
@@ -464,7 +501,6 @@ function animate() {
     updatePlay();
   }
 
-  // 灯光的轻微呼吸
   roomLight.intensity = 11.5 + Math.sin(elapsed * 0.7) * 0.5;
 
   if (!hud.$debug.classList.contains('hidden')) {
@@ -472,7 +508,7 @@ function animate() {
     if (debugTimer > 0.1) {
       debugTimer = 0;
       hud.debug(
-        `phase: ${state.phase}\naura: ${state.aura}\npos: ${player.position.x.toFixed(2)}, ${player.position.z.toFixed(2)}\nflags: ${JSON.stringify(state.flags)}`
+        `phase: ${state.phase}\naura: ${state.aura} (need >= ${LINES.meta.threshold})\npos: ${player.position.x.toFixed(2)}, ${player.position.z.toFixed(2)}\nflags: ${JSON.stringify(state.flags)}`
       );
     }
   }
@@ -486,7 +522,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// 开发模式：?skipIntro 直接进游戏；?intro 自动播放开场（给 C 调镜头用）
+// 开发模式：?skipIntro 直接进游戏；?intro 自动播放开场（调镜头用）
 const devParams = new URLSearchParams(location.search);
 if (devParams.has('skipIntro')) {
   hud.hideStart();
