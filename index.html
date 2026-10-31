@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>漂亮的恶意：入学日</title>
+  <link rel="stylesheet" href="./src/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene"></canvas>
+
+    <div id="task" class="hidden"><span class="dot"></span><span id="task-text">找到你的空位，坐下</span></div>
+
+    <div id="subtitle" class="hidden">
+      <div id="speaker"></div>
+      <div id="line"></div>
+    </div>
+
+    <div id="choices" class="hidden"></div>
+
+    <div id="qte" class="hidden">
+      <div class="qte-row"><kbd>E</kbd><span id="qte-label">踢开</span></div>
+      <div class="qte-bar"><i id="qte-fill"></i></div>
+    </div>
+
+    <div id="prompt" class="hidden"><kbd>E</kbd><span id="prompt-label"></span></div>
+
+    <div id="vignette"></div>
+    <div id="fade"></div>
+
+    <div id="start" class="screen">
+      <div class="start-inner">
+        <p class="kicker">VIBEHACKS #06 · 3D 叙事 Demo</p>
+        <h1>漂亮的恶意<span>：入学日</span></h1>
+        <p class="lead">在这里，座位的距离，就是阶层的距离。</p>
+        <button id="btn-start">点击开始</button>
+        <p class="hint">WASD 移动 · 鼠标拖动环视 · E 互动 · 数字键选择</p>
+      </div>
+    </div>
+
+    <div id="card" class="screen hidden">
+      <div class="card-inner">
+        <p id="card-kicker" class="kicker"></p>
+        <h2 id="card-title"></h2>
+        <p id="card-sub"></p>
+        <button id="btn-restart">重新开始</button>
+      </div>
+    </div>
+
+    <button id="skip" class="hidden">跳过开场</button>
+    <div id="debug" class="hidden"></div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
